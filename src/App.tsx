@@ -310,14 +310,15 @@ export default function App() {
           }
 
           // log hypothetical result
-          const openSpread = Number.isFinite(st.lastHotSpread) ? st.lastHotSpread : best;
+          const openSpread = Number.isFinite(st.lastHotSpread) ? (st.lastHotSpread as number) : best;
           const closeSpread = best;
           const dep = depositRef.current;
 
           const exitQuotes: Partial<Record<Venue, Quote>> = { binance: qb, bybit: qy, okx: qk, bitget: qg };
-          const { profitPct } = st.entry
+          const pnl = st.entry
             ? calcPnl(st.entry.dir, st.entry.quotes, exitQuotes)
             : { profitPct: closeSpread, profitValue: Number.NaN };
+          const profitPct = pnl.profitPct;
           const profitValue = Number.isFinite(profitPct) ? (dep * profitPct) / 100 : Number.NaN;
           const delta = Number.isFinite(profitValue) ? profitValue : 0;
           const balance = dayStart + dayPnl + delta;

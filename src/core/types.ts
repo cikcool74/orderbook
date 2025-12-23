@@ -1,11 +1,16 @@
 ﻿export type Venue = "binance" | "bybit" | "okx" | "bitget";
 
+export type DepthLevel = {
+  price: number;
+  qty: number;
+};
+
 export type Quote = {
   bid: number;
   ask: number;
   tsMs: number;
-  bids?: { price: number; qty: number }[];
-  asks?: { price: number; qty: number }[];
+  bids?: DepthLevel[];
+  asks?: DepthLevel[];
 };
 
 export enum SignalState {
@@ -20,7 +25,7 @@ export type SymbolState = {
   lastUpdateMs: number;
 
   spreadPct: number; // best direction spread
-  dir: "BUY_BIN_SELL_BYB" | "BUY_BYB_SELL_BIN" | "—" | string;
+  dir: "BUY_BIN_SELL_BYB" | "BUY_BYB_SELL_BIN" | "-" | string;
 
   // HOT/CLOSE state machine
   wasHot: boolean;
@@ -63,7 +68,7 @@ export function mkEmptyState(symbols: string[]): Record<string, SymbolState> {
       quotes: {},
       lastUpdateMs: 0,
       spreadPct: Number.NaN,
-      dir: "—",
+      dir: "-",
       wasHot: false,
       signal: SignalState.NEUTRAL,
       lastSignalKind: null,
