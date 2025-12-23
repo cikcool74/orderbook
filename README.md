@@ -1,37 +1,45 @@
-# Arb Scanner — Binance vs Bybit
+# TVAcademy Perp Arb Scanner
 
-Frontend: React + Vite (TypeScript) streaming best bid/ask from Binance USDT-M Futures and Bybit USDT Perp.  
-Backend: optional Node aggregator that exposes combined WS + `/health`.
+Web UI for monitoring cross-exchange spreads (Binance, Bybit, OKX, Bitget) with HOT/CLOSE signals, blinking alerts, virtual PnL logging, and depth snapshots.
 
-## Prereqs
-- Node 18+ (ESM + Vite)
+## Features
+- Spread engine with multi-venue best bid/ask
+- HOT / HOT* / CLOSE state machine with thresholds
+- Live table with status pills and L2 snapshots per venue
+- Virtual PnL logging (open/close spread, balance delta)
+- Backend relay for Bitget (+ OKX alt) via `npm run server`
 
-## Install deps
-```sh
+## Quick start
+```bash
+# install deps
 npm install
-```
-If you had an old `node_modules` / `package-lock.json`, wipe and reinstall to avoid stale deps.
 
-## Backend (aggregator)
-```sh
-PORT=8787 SYMBOLS=BTCUSDT,ETHUSDT npm run server
-```
-Endpoints:
-- HTTP: `http://localhost:8787/health`
-- WS:   `ws://localhost:8787/ws`
-Messages: `{ t:"q", v:"binance"|"bybit", s:"BTCUSDT", bid:123.4, ask:123.5, ts:169... }`
-
-## Frontend (direct to exchanges)
-```sh
+# frontend (Vite)
 npm run dev
-# open http://localhost:5173
-```
-- Edit symbols in the textarea (one per line, USDT perps).
-- HOT / HOT🔥 / CLOSE thresholds adjustable in the top bar.
-- Sort modes: signal-first or absolute spread.
 
-## Production build
-```sh
-npm run build
-npm run preview
+# backend relay (WS on :8787 for Bitget/OKX passthrough)
+npm run server
 ```
+
+Open `http://localhost:5173` (or shown Vite URL). For Bitget/OKX depth to appear, keep `npm run server` running.
+
+## GitHub
+Existing remote: `https://github.com/cikcool74/orderbook.git`
+
+If pushing from local:
+```bash
+git init
+git add .
+git commit -m "init"
+git branch -M main
+git remote add origin https://github.com/cikcool74/orderbook.git
+git push -u origin main
+```
+
+## Config
+- HOT_SPREAD, CLOSE_SPREAD in code (App.tsx) — adjust to your strategy.
+- Default symbols: ~30 liquid USDT perps (see `src/core/types.ts`).
+
+## Notes
+- Sandbox/logs: frontend logs close events; backend logs WS reconnects.
+- Heartbeats/reconnects: WS clients auto-reconnect with simple retry.
