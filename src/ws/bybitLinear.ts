@@ -21,6 +21,9 @@ export class BybitLinearWS {
   private readonly onQuote: OnQuote;
   private reconnectTimer: number | null = null;
   private pingTimer: number | null = null;
+  private heartbeatTimer: number | null = null;
+  private backoffMs = 900;
+  private lastMsgMs = 0;
 
   constructor(symbols: string[], onQuote: OnQuote) {
     this.symbols = symbols.map((s) => s.toUpperCase());
@@ -36,8 +39,10 @@ export class BybitLinearWS {
     this.stopped = true;
     if (this.reconnectTimer) window.clearTimeout(this.reconnectTimer);
     if (this.pingTimer) window.clearInterval(this.pingTimer);
+    if (this.heartbeatTimer) window.clearInterval(this.heartbeatTimer);
     this.reconnectTimer = null;
     this.pingTimer = null;
+    this.heartbeatTimer = null;
     this.ws?.close();
     this.ws = null;
   }
@@ -47,6 +52,8 @@ export class BybitLinearWS {
 
     const ws = new WebSocket("wss://stream.bybit.com/v5/public/linear");
     this.ws = ws;
+    this.backoffMs = 900;
+    this.lastMsgMs = Date.now();
 
     ws.onopen = () => {
       this.subscribe();
@@ -62,15 +69,17 @@ export class BybitLinearWS {
       try {
         const msg = JSON.parse(ev.data as string);
 
-        if (typeof msg?.topic === "string" && msg.topic.startsWith("orderbook.1.")) {
-          const symbol = (msg.topic as string).split(".").pop()!;
-          const d = msg.data;
+      if (typeof msg?.topic === "string" && msg.topic.startsWith("orderbook.1.")) {
+        const symbol = (msg.topic as string).split(".").pop()!;
+        const d = msg.data;
 
-          const bidsArr = d?.b || [];
-          const asksArr = d?.a || [];
-          const bestBidRow = bidsArr?.[0];
-          const bestAskRow = asksArr?.[0];
-          if (!bestBidRow || !bestAskRow) return;
+        this.lastMsgMs = Date.now();
+
+        const bidsArr = d?.b || [];
+        const asksArr = d?.a || [];
+        const bestBidRow = bidsArr?.[0];
+        const bestAskRow = asksArr?.[0];
+        if (!bestBidRow || !bestAskRow) return;
 
           const bid = Number(bestBidRow[0]);
           const ask = Number(bestAskRow[0]);
@@ -90,6 +99,14 @@ export class BybitLinearWS {
         }
       } catch {}
     };
+
+    if (this.heartbeatTimer) window.clearInterval(this.heartbeatTimer);
+    this.heartbeatTimer = window.setInterval(() => {
+      if (!this.ws) return;
+      if (Date.now() - this.lastMsgMs > 15000) {
+        try { this.ws.close(); } catch {}
+      }
+    }, 5000);
   }
 
   private subscribe() {
@@ -106,13 +123,19 @@ export class BybitLinearWS {
   private scheduleReconnect() {
     if (this.stopped) return;
     if (this.reconnectTimer) return;
+    if (this.heartbeatTimer) {
+      window.clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
 
     if (this.pingTimer) window.clearInterval(this.pingTimer);
     this.pingTimer = null;
 
+    const wait = Math.min(this.backoffMs, 15000) * (1 + Math.random() * 0.25);
     this.reconnectTimer = window.setTimeout(() => {
       this.reconnectTimer = null;
+      this.backoffMs = Math.min(this.backoffMs * 1.8, 15000);
       this.open();
-    }, 900);
+    }, wait);
   }
 }

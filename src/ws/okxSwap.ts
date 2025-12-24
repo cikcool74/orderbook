@@ -9,6 +9,9 @@ export class OkxSwapWS {
   private readonly symbols: string[];
   private readonly onQuote: OnQuote;
   private reconnectTimer: number | null = null;
+  private heartbeatTimer: number | null = null;
+  private backoffMs = 1000;
+  private lastMsgMs = 0;
 
   constructor(symbols: string[], onQuote: OnQuote) {
     // OKX expects BTC-USDT-SWAP format
@@ -24,7 +27,9 @@ export class OkxSwapWS {
   close() {
     this.stopped = true;
     if (this.reconnectTimer) window.clearTimeout(this.reconnectTimer);
+    if (this.heartbeatTimer) window.clearInterval(this.heartbeatTimer);
     this.reconnectTimer = null;
+    this.heartbeatTimer = null;
     this.ws?.close();
     this.ws = null;
   }
@@ -34,6 +39,8 @@ export class OkxSwapWS {
 
     const ws = new WebSocket("wss://ws.okx.com:8443/ws/v5/public");
     this.ws = ws;
+    this.backoffMs = 1000;
+    this.lastMsgMs = Date.now();
 
     ws.onopen = () => {
       const args = this.symbols.map((instId) => ({ channel: "books5", instId }));
@@ -50,6 +57,8 @@ export class OkxSwapWS {
         const instId = msg.arg.instId;
         if (!instId) return;
         const symbol = instId.replace("-USDT-SWAP", "") + "USDT";
+
+        this.lastMsgMs = Date.now();
 
         const data = msg.data[0];
         const bidsArr = data?.bids || [];
@@ -73,14 +82,27 @@ export class OkxSwapWS {
         });
       } catch {}
     };
+
+    if (this.heartbeatTimer) window.clearInterval(this.heartbeatTimer);
+    this.heartbeatTimer = window.setInterval(() => {
+      if (!this.ws) return;
+      if (Date.now() - this.lastMsgMs > 15000) {
+        try { this.ws.close(); } catch {}
+      }
+    }, 6000);
   }
 
   private scheduleReconnect() {
     if (this.stopped) return;
     if (this.reconnectTimer) return;
+    if (this.heartbeatTimer) {
+      window.clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
     this.reconnectTimer = window.setTimeout(() => {
       this.reconnectTimer = null;
+      this.backoffMs = Math.min(this.backoffMs * 1.8, 15000);
       this.open();
-    }, 1000);
+    }, Math.min(this.backoffMs, 15000) * (1 + Math.random() * 0.25));
   }
 }

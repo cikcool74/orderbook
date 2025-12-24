@@ -117,7 +117,7 @@ body::after {
 
 .grid {
   display: grid;
-  grid-template-columns: 1fr 320px;
+  grid-template-columns: 1fr 340px;
   gap: 12px;
   min-height: 0;
 }
@@ -148,7 +148,7 @@ body::after {
 
 .thead {
   display: grid;
-  grid-template-columns: 90px 70px 70px 150px repeat(4, minmax(150px, 1fr)) 160px;
+  grid-template-columns: 90px 70px 140px 180px 150px 150px 150px 150px 130px;
   padding: 8px 10px;
   background: rgba(75,255,159,0.05);
   border-bottom: 1px solid var(--line);
@@ -161,7 +161,7 @@ body::after {
 
 .trow {
   display: grid;
-  grid-template-columns: 90px 70px 70px 150px repeat(4, minmax(150px, 1fr)) 160px;
+  grid-template-columns: 90px 70px 140px 180px 150px 150px 150px 150px 130px;
   padding: 8px 10px;
   border-bottom: 1px solid rgba(255,255,255,0.04);
   font-variant-numeric: tabular-nums;

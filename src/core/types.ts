@@ -1,4 +1,4 @@
-﻿export type Venue = "binance" | "bybit" | "okx" | "bitget";
+export type Venue = "binance" | "bybit" | "okx" | "bitget";
 
 export type DepthLevel = {
   price: number;
@@ -11,6 +11,7 @@ export type Quote = {
   tsMs: number;
   bids?: DepthLevel[];
   asks?: DepthLevel[];
+  venueEmaMs?: number;
 };
 
 export enum SignalState {
@@ -20,11 +21,33 @@ export enum SignalState {
   CLOSE = "CLOSE",
 }
 
+export type VenueSnapshot = {
+  bid: number;
+  ask: number;
+  ts: number;
+};
+
+export type SpreadSample = {
+  buy: Venue;
+  sell: Venue;
+  spreadPct: number;
+  buyAsk: number;
+  sellBid: number;
+  ts: number;
+};
+
 export type SymbolState = {
   quotes: Partial<Record<Venue, Quote>>;
   lastUpdateMs: number;
 
-  spreadPct: number; // best direction spread
+  spreadPct: number; // currently used as NET edge pct for ranking
+  grossSpreadPct?: number;
+  netEdgePct?: number;
+  netEdgeUSDT?: number;
+  feesPct?: number;
+  bufferPct?: number;
+  bestBuyVenue?: Venue | null;
+  bestSellVenue?: Venue | null;
   dir: "BUY_BIN_SELL_BYB" | "BUY_BYB_SELL_BIN" | "-" | string;
 
   // HOT/CLOSE state machine
@@ -42,23 +65,80 @@ export type SymbolState = {
     buyVenue: string;
     sellVenue: string;
     quotes: Partial<Record<Venue, Quote>>;
+    openSpread?: number;
+    netEdgePct?: number;
+    netEdgeUSDT?: number;
+    feesPct?: number;
+    bufferPct?: number;
+    openedAt?: number;
+    buyAsk?: number;
+    sellBid?: number;
   };
+
+  store?: Partial<Record<Venue, VenueSnapshot>>;
+  lastSpreadSample?: SpreadSample;
+  candidate?: {
+    startedAt: number;
+    lastSeenAt: number;
+    buyVenue: Venue;
+    sellVenue: Venue;
+    netEdgePct: number;
+  };
+  openTrade?: {
+    id: string;
+    openedAt: number;
+    buyVenue: Venue;
+    sellVenue: Venue;
+    openNetEdgePct: number;
+    openGrossPct: number;
+    openFeesPct: number;
+    openBufferPct: number;
+    notional: number;
+  };
+  queue?: TradeIntent[];
+  activeTrades?: TradeIntent[];
+  lastCloseMs?: number;
 };
 
 export type Row = {
   symbol: string;
   dir: SymbolState["dir"];
   spreadPct: number;
+  grossSpreadPct?: number;
+  netEdgePct?: number;
+  netEdgeUSDT?: number;
+  feesPct?: number;
+  bufferPct?: number;
+  bestBuyVenue?: Venue | null;
+  bestSellVenue?: Venue | null;
+  stateLabel?: string;
+  stateKind?: "IDLE" | "CANDIDATE" | "OPEN";
   signal: SignalState;
   blink: boolean;
   binance?: Quote;
   bybit?: Quote;
   okx?: Quote;
   bitget?: Quote;
-  liveB: boolean;
-  liveY: boolean;
-  liveOkx: boolean;
-  liveBitget: boolean;
+  venues?: Partial<Record<Venue, VenueStatus>>;
+};
+
+export type TradeIntent = {
+  id: string;
+  symbol: string;
+  buyVenue: Venue;
+  sellVenue: Venue;
+  notional: number;
+  edge: {
+    gross: number;
+    net: number;
+  };
+  ts: number;
+};
+
+export type VenueStatus = {
+  status: "OK" | "STALE" | "OFF";
+  ageMs: number;
+  emaMs?: number;
 };
 
 export function mkEmptyState(symbols: string[]): Record<string, SymbolState> {
@@ -87,11 +167,22 @@ export const DEFAULT_SYMBOLS: string[] = [
   "ATOMUSDT", "UNIUSDT", "APTUSDT", "ARBUSDT", "OPUSDT",
   "NEARUSDT", "SUIUSDT", "FILUSDT", "INJUSDT", "AAVEUSDT",
   "LDOUSDT", "XMRUSDT", "CRVUSDT", "RSRUSDT",
+  // Added batch for extended scanning
+  "ICPUSDT", "FTMUSDT", "GALAUSDT", "SANDUSDT", "MANAUSDT",
+  "EOSUSDT", "ALGOUSDT", "FLOWUSDT", "KAVAUSDT", "DYDXUSDT",
+  "ZRXUSDT", "ENJUSDT", "SNXUSDT", "1INCHUSDT", "MASKUSDT",
+  "ROSEUSDT", "GMTUSDT", "CELOUSDT",
+  // New batch
+  "BALUSDT", "COMPUSDT", "SUSHIUSDT", "YFIUSDT", "KSMUSDT",
+  "BANDUSDT", "NMRUSDT", "OMGUSDT", "QTUMUSDT", "ICXUSDT",
+  "CFXUSDT", "SKLUSDT", "ANKRUSDT", "HOTUSDT", "IOSTUSDT",
+  "LRCUSDT", "STORJUSDT", "COTIUSDT", "OCEANUSDT", "ARPAUSDT",
+  "APEUSDT", "CHZUSDT", "AXSUSDT", "IMXUSDT", "RNDRUSDT",
+  "RUNEUSDT", "THETAUSDT", "IOTAUSDT", "WAVESUSDT",
 ];
 
 export function computeSpreadPct(buyAsk: number, sellBid: number): number {
-  // positive when sellBid > buyAsk
-  const mid = (buyAsk + sellBid) / 2;
-  if (!Number.isFinite(mid) || mid <= 0) return Number.NaN;
-  return ((sellBid - buyAsk) / mid) * 100;
+  // Directional spread: (sellBid - buyAsk) / buyAsk * 100
+  if (!Number.isFinite(buyAsk) || !Number.isFinite(sellBid) || buyAsk <= 0) return Number.NaN;
+  return ((sellBid - buyAsk) / buyAsk) * 100;
 }

@@ -15,6 +15,9 @@ export class BinanceFuturesWS {
   private readonly symbols: string[];
   private readonly onQuote: OnQuote;
   private reconnectTimer: number | null = null;
+  private heartbeatTimer: number | null = null;
+  private backoffMs = 800;
+  private lastMsgMs = 0;
 
   constructor(symbols: string[], onQuote: OnQuote) {
     this.symbols = symbols.map((s) => s.toLowerCase());
@@ -29,7 +32,9 @@ export class BinanceFuturesWS {
   close() {
     this.stopped = true;
     if (this.reconnectTimer) window.clearTimeout(this.reconnectTimer);
+    if (this.heartbeatTimer) window.clearInterval(this.heartbeatTimer);
     this.reconnectTimer = null;
+    this.heartbeatTimer = null;
     this.ws?.close();
     this.ws = null;
   }
@@ -42,11 +47,14 @@ export class BinanceFuturesWS {
 
     const ws = new WebSocket(url);
     this.ws = ws;
+    this.backoffMs = 800;
+    this.lastMsgMs = Date.now();
 
     ws.onclose = () => this.scheduleReconnect();
     ws.onerror = () => this.scheduleReconnect();
 
     ws.onmessage = (ev) => {
+      this.lastMsgMs = Date.now();
       try {
         const msg = JSON.parse(ev.data as string);
         const data = msg?.data;
@@ -77,14 +85,28 @@ export class BinanceFuturesWS {
         this.onQuote(symbol, quote);
       } catch {}
     };
+
+    if (this.heartbeatTimer) window.clearInterval(this.heartbeatTimer);
+    this.heartbeatTimer = window.setInterval(() => {
+      if (!this.ws) return;
+      if (Date.now() - this.lastMsgMs > 15000) {
+        try { this.ws.close(); } catch {}
+      }
+    }, 5000);
   }
 
   private scheduleReconnect() {
     if (this.stopped) return;
     if (this.reconnectTimer) return;
+    if (this.heartbeatTimer) {
+      window.clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
+    const wait = Math.min(this.backoffMs, 15000) * (1 + Math.random() * 0.25);
     this.reconnectTimer = window.setTimeout(() => {
       this.reconnectTimer = null;
+      this.backoffMs = Math.min(this.backoffMs * 1.8, 15000);
       this.open();
-    }, 800);
+    }, wait);
   }
 }
