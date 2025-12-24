@@ -106,7 +106,7 @@ export default function App() {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const [selected, setSelected] = useState<string>(DEFAULT_SYMBOLS[0]);
   const [tick, setTick] = useState(0);
-  const venueEmaRef = useRef<Record<Venue, number>>({});
+  const venueEmaRef = useRef<Partial<Record<Venue, number>>>({});
   const [stats, setStats] = useState<any>(null);
   const [equityPoints, setEquityPoints] = useState<{ t: number; equity: number; dd?: number }[]>([]);
   const symbolLockRef = useRef<Record<string, boolean>>({});
@@ -502,15 +502,6 @@ export default function App() {
           ts: t,
         };
       }
-    }
-
-    if (!best) {
-      st.spreadPct = Number.NaN;
-      st.dir = "-";
-      st.signal = SignalState.NEUTRAL;
-      st.candidate = undefined;
-      if (st.openTrade) closeTrade("STALE", Number.NaN);
-      return;
     }
 
     const bestBuyStatus = venues.find((v) => v.name === best?.buy)?.status;
